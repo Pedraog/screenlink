@@ -11,12 +11,11 @@ button{font-size:22px;padding:14px 28px;margin-top:40vh;background:#007aff;borde
 <body>
 <button id="btn">Transmitir Minha Tela</button>
 
-<!-- Firebase compatível com HTML puro -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <script>
-// Config do seu Firebase
+// Config do Firebase já com seus valores
 const firebaseConfig = {
   apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7kYPiVU73pVY",
   authDomain: "screenlink-7bbef.firebaseapp.com",
@@ -30,7 +29,7 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-// Pega o ID da sala do QR code
+// Pega ID da sala do link
 const urlParams = new URLSearchParams(window.location.search);
 const roomId = urlParams.get('room') || prompt("Informe o ID da sala");
 
@@ -38,16 +37,13 @@ document.getElementById('btn').onclick = async () => {
   const stream = await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});
   const pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
 
-  // Adiciona tracks do stream
   stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-  // Quando a conexão estiver pronta, envia offer pro Firebase
   pc.onicecandidate = e => {
     if (e.candidate) return;
     db.ref('rooms/' + roomId + '/offer').set(pc.localDescription.toJSON());
   };
 
-  // Escuta a answer do PC
   db.ref('rooms/' + roomId + '/answer').on('value', async snapshot => {
     const answer = snapshot.val();
     if (answer) await pc.setRemoteDescription(answer);
