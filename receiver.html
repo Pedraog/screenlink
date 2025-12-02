@@ -1,25 +1,51 @@
 <!doctype html>
 <html>
 <head>
-  <meta charset="utf-8">
-  <title>Receber Tela</title>
-  <style>
-    body{margin:0;background:#000} video{width:100%;height:100vh}
-  </style>
+<meta charset="utf-8">
+<title>Receber Tela</title>
+<style>
+body{margin:0;background:#000} 
+video{width:100%;height:100vh}
+</style>
 </head>
 <body>
-  <video id="v" autoplay playsinline></video>
+<video id="v" autoplay playsinline></video>
+
+<!-- Firebase compatível com HTML puro -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
 <script>
-(async () => {
-  const pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
-  pc.ontrack = e => document.getElementById('v').srcObject = e.streams[0];
+// Config do seu Firebase
+const firebaseConfig = {
+  apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7kYPiVU73pVY",
+  authDomain: "screenlink-7bbef.firebaseapp.com",
+  databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "screenlink-7bbef",
+  storageBucket: "screenlink-7bbef.firebasestorage.app",
+  messagingSenderId: "854919839518",
+  appId: "1:854919839518:web:a91e2cc425f34e0290530f",
+  measurementId: "G-SDVTFWVFF5"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
-  const sdp = prompt("Cole aqui o SDP que apareceu no iPhone:");
-  await pc.setRemoteDescription(JSON.parse(atob(sdp)));
+// Pede o ID da sala (ou use QR code para passar ?room=ID)
+const roomId = prompt("Informe o ID da sala (do QR code do iPhone):");
+const pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+
+// Mostra vídeo recebido
+pc.ontrack = e => document.getElementById('v').srcObject = e.streams[0];
+
+// Escuta offer do iPhone e responde com answer
+db.ref('rooms/' + roomId + '/offer').on('value', async snapshot => {
+  const offer = snapshot.val();
+  if (!offer) return;
+  await pc.setRemoteDescription(offer);
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
-})();
+  db.ref('rooms/' + roomId + '/answer').set(pc.localDescription.toJSON());
+});
 </script>
 </body>
 </html>
