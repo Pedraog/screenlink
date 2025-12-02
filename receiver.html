@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Receber Tela</title>
+  <style>
+    body{margin:0;background:#000} video{width:100%;height:100vh}
+  </style>
+</head>
+<body>
+  <video id="v" autoplay playsinline></video>
+
+<script>
+(async () => {
+  const pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+  pc.ontrack = e => document.getElementById('v').srcObject = e.streams[0];
+
+  const sdp = prompt("Cole aqui o SDP que apareceu no iPhone:");
+  await pc.setRemoteDescription(JSON.parse(atob(sdp)));
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+})();
+</script>
+</body>
+</html>
