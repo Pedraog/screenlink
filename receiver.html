@@ -34,7 +34,8 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 // Gera ID de sala aleatório
-const roomId = Math.random().toString(36).substring(2,8).toUpperCase();
+const roomId = Math.random().toString(36).substring(2,8).toUpperCase() || "DEFAULT";
+
 
 // Cria link para iPhone
 const baseURL = window.location.origin + "/index.html?room=" + roomId;
