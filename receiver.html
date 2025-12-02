@@ -20,8 +20,6 @@ video{width:100%;height:80vh;margin-top:10px;}
 
 <script>
 window.onload = function() {
-    console.log("Página carregada, iniciando script...");
-
     // Config Firebase
     const firebaseConfig = {
       apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7kYPiVU73pVY",
@@ -38,33 +36,16 @@ window.onload = function() {
 
     // Gera sala aleatória
     const roomId = Math.random().toString(36).substring(2,8).toUpperCase();
-    console.log("Room ID:", roomId);
 
-    // Gera link do iPhone
+    // Link seguro para iPhone
     const baseURL = (window.location.origin && window.location.origin !== "null")
       ? window.location.origin + "/index.html?room=" + roomId
       : "https://pedraog.github.io/screenlink/index.html?room=" + roomId;
 
-    console.log("Link para QR:", baseURL);
-
     // Gera QR code
-    const qrDiv = document.getElementById('qrcode');
-    if(!qrDiv) {
-        console.error("Div para QR code não encontrada!");
-        return;
-    }
-
-    if(typeof QRCode === "undefined") {
-        console.error("Biblioteca QRCode não carregada!");
-        return;
-    }
-
-    QRCode.toCanvas(qrDiv, baseURL, function(error) {
+    QRCode.toCanvas(document.getElementById('qrcode'), baseURL, function(error) {
         if(error) {
-            console.error("Erro ao gerar QR code:", error);
             alert("Erro ao gerar QR code. Abra o site via GitHub Pages.");
-        } else {
-            console.log("QR code gerado com sucesso!");
         }
     });
 
@@ -75,12 +56,10 @@ window.onload = function() {
     db.ref('rooms/' + roomId + '/offer').on('value', async snapshot => {
       const offer = snapshot.val();
       if (!offer) return;
-      console.log("Offer recebido, enviando answer...");
       await pc.setRemoteDescription(offer);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       db.ref('rooms/' + roomId + '/answer').set(pc.localDescription.toJSON());
-      console.log("Answer enviada!");
     });
 };
 </script>
