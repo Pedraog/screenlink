@@ -19,11 +19,11 @@ video{width:100%;height:80vh;margin-top:10px;}
 <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 
 <script>
-// Config do Firebase já com seus valores
+// Config do Firebase com seu database
 const firebaseConfig = {
   apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7kYPiVU73pVY",
   authDomain: "screenlink-7bbef.firebaseapp.com",
-  databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app",
+  databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app/",
   projectId: "screenlink-7bbef",
   storageBucket: "screenlink-7bbef.firebasestorage.app",
   messagingSenderId: "854919839518",
@@ -34,8 +34,7 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 // Gera ID de sala aleatório
-const roomId = Math.random().toString(36).substring(2,8).toUpperCase() || "DEFAULT";
-
+const roomId = Math.random().toString(36).substring(2,8).toUpperCase();
 
 // Cria link para iPhone
 const baseURL = window.location.origin + "/index.html?room=" + roomId;
