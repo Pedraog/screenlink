@@ -19,48 +19,70 @@ video{width:100%;height:80vh;margin-top:10px;}
 <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
 
 <script>
-// Config do Firebase com seu database
-const firebaseConfig = {
-  apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7kYPiVU73pVY",
-  authDomain: "screenlink-7bbef.firebaseapp.com",
-  databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app/",
-  projectId: "screenlink-7bbef",
-  storageBucket: "screenlink-7bbef.firebasestorage.app",
-  messagingSenderId: "854919839518",
-  appId: "1:854919839518:web:a91e2cc425f34e0290530f",
-  measurementId: "G-SDVTFWVFF5"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+window.onload = function() {
+    console.log("Página carregada, iniciando script...");
 
-// Gera ID de sala aleatório
-const roomId = Math.random().toString(36).substring(2,8).toUpperCase();
+    // Config Firebase
+    const firebaseConfig = {
+      apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7kYPiVU73pVY",
+      authDomain: "screenlink-7bbef.firebaseapp.com",
+      databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app/",
+      projectId: "screenlink-7bbef",
+      storageBucket: "screenlink-7bbef.firebasestorage.app",
+      messagingSenderId: "854919839518",
+      appId: "1:854919839518:web:a91e2cc425f34e0290530f",
+      measurementId: "G-SDVTFWVFF5"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
 
-// Define link seguro para iPhone, mesmo se origin estiver vazio
-const baseURL = (window.location.origin && window.location.origin !== "null")
-  ? window.location.origin + "/index.html?room=" + roomId
-  : "https://pedraog.github.io/screenlink/index.html?room=" + roomId;
+    // Gera sala aleatória
+    const roomId = Math.random().toString(36).substring(2,8).toUpperCase();
+    console.log("Room ID:", roomId);
 
-// Gera o QR code
-QRCode.toCanvas(document.getElementById('qrcode'), baseURL, function(error) {
-    if(error) {
-        console.error("Erro ao gerar QR code:", error);
-        alert("Erro ao gerar QR code. Abra o site via GitHub Pages.");
+    // Gera link do iPhone
+    const baseURL = (window.location.origin && window.location.origin !== "null")
+      ? window.location.origin + "/index.html?room=" + roomId
+      : "https://pedraog.github.io/screenlink/index.html?room=" + roomId;
+
+    console.log("Link para QR:", baseURL);
+
+    // Gera QR code
+    const qrDiv = document.getElementById('qrcode');
+    if(!qrDiv) {
+        console.error("Div para QR code não encontrada!");
+        return;
     }
-});
 
-const pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
-pc.ontrack = e => document.getElementById('v').srcObject = e.streams[0];
+    if(typeof QRCode === "undefined") {
+        console.error("Biblioteca QRCode não carregada!");
+        return;
+    }
 
-// Recebe offer do iPhone e envia answer
-db.ref('rooms/' + roomId + '/offer').on('value', async snapshot => {
-  const offer = snapshot.val();
-  if (!offer) return;
-  await pc.setRemoteDescription(offer);
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  db.ref('rooms/' + roomId + '/answer').set(pc.localDescription.toJSON());
-});
+    QRCode.toCanvas(qrDiv, baseURL, function(error) {
+        if(error) {
+            console.error("Erro ao gerar QR code:", error);
+            alert("Erro ao gerar QR code. Abra o site via GitHub Pages.");
+        } else {
+            console.log("QR code gerado com sucesso!");
+        }
+    });
+
+    // Configura WebRTC
+    const pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+    pc.ontrack = e => document.getElementById('v').srcObject = e.streams[0];
+
+    db.ref('rooms/' + roomId + '/offer').on('value', async snapshot => {
+      const offer = snapshot.val();
+      if (!offer) return;
+      console.log("Offer recebido, enviando answer...");
+      await pc.setRemoteDescription(offer);
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      db.ref('rooms/' + roomId + '/answer').set(pc.localDescription.toJSON());
+      console.log("Answer enviada!");
+    });
+};
 </script>
 </body>
 </html>
