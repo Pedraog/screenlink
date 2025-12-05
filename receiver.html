@@ -34,7 +34,6 @@ const app = firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
 (async () => {
-
     const pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
     const video = document.getElementById("v");
 
@@ -42,26 +41,24 @@ const db = firebase.database();
         video.srcObject = e.streams[0];
     };
 
-    // Pega o código da sala automaticamente via prompt
-    const roomId = prompt("Cole o código da sala (QR do iPhone):");
+    // Pega o ID da sala do QR via parâmetro URL
+    const roomId = new URLSearchParams(window.location.search).get("room");
     if (!roomId) {
-        alert("Nenhuma sala informada");
+        document.body.innerHTML = "<h2>Erro: Sala não encontrada no link</h2>";
         return;
     }
 
-    // Escuta a oferta do iPhone
-    db.ref("rooms/" + roomId + "/offer").once("value").then(snap => {
-        if (!snap.exists()) {
-            alert("Oferta não encontrada. Verifique o QR code.");
-            return;
-        }
+    // Escuta a oferta do iPhone/Android
+    db.ref("rooms/" + roomId + "/offer").on("value", async snap => {
+        if (!snap.exists()) return;
         const offer = JSON.parse(atob(snap.val()));
-        pc.setRemoteDescription(offer).then(async () => {
-            const answer = await pc.createAnswer();
-            await pc.setLocalDescription(answer);
-            // Envia a resposta para o Firebase
-            db.ref("rooms/" + roomId + "/answer").set(btoa(JSON.stringify(answer)));
-        });
+        await pc.setRemoteDescription(offer);
+
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+
+        // Envia resposta para o Firebase
+        db.ref("rooms/" + roomId + "/answer").set(btoa(JSON.stringify(answer)));
     });
 
 })();
