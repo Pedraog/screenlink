@@ -12,22 +12,31 @@ body{margin:0;background:#000;color:#fff;text-align:center;font-family:Arial;}
 <h2>Escaneie o QR</h2>
 <div id="qrcode"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+<!-- ESTA É A BIBLIOTECA QUE FUNCIONA -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
 <script>
 window.onload = function() {
+
     // ID de sala aleatório
     const roomId = Math.random().toString(36).substring(2,8).toUpperCase();
-    
-    // Link fixo para teste
+
+    // Link que vai aparecer no QR
     const link = "https://pedraog.github.io/screenlink/index.html?room=" + roomId;
-    
-    // Gera QR code
-    QRCode.toCanvas(document.getElementById('qrcode'), link, function(error) {
-        if(error) {
-            alert("Erro ao gerar QR code!");
-            console.error(error);
-        }
-    });
+
+    try {
+        new QRCode(document.getElementById("qrcode"), {
+            text: link,
+            width: 256,
+            height: 256,
+            colorDark : "#ffffff",
+            colorLight : "#000000"
+        });
+    } catch (e) {
+        alert("Erro ao gerar QR code!");
+        console.error(e);
+    }
+
 };
 </script>
 </body>
