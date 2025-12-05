@@ -2,82 +2,104 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Transmitir Tela</title>
+<title>Transmitir Tela (Transmissor)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-body {
-    background: #000;
-    color: white;
-    font-family: Arial;
-    text-align: center;
-    padding: 20px;
-}
-button {
-    padding: 15px 25px;
-    border: none;
-    background: #0a84ff;
-    color: white;
-    border-radius: 8px;
-    font-size: 22px;
-}
+  body{background:#111;color:#eee;font-family:Arial,Helvetica,sans-serif;text-align:center;padding:20px}
+  h1{font-size:18px;margin-top:40px}
+  #status{margin-top:18px}
+  button{font-size:18px;padding:12px 20px;border-radius:8px;border:0;background:#0a84ff;color:#fff}
 </style>
 </head>
 <body>
+  <h1>Transmitir Tela — toque para iniciar</h1>
+  <button id="startBtn">Iniciar transmissão</button>
+  <div id="status"></div>
 
-<h2>Toque para transmitir sua tela</h2>
-<button id="btn">Iniciar transmissão</button>
+  <!-- Firebase compat para uso direto em HTML -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
+<script>
+/* ===== CONFIG DO FIREBASE - já apontando para seu projeto ===== */
 const firebaseConfig = {
   apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7kYPiVU73pVY",
   authDomain: "screenlink-7bbef.firebaseapp.com",
   databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: "screenlink-7bbef",
-  storageBucket: "screenlink-7bbef.appspot.com",
+  storageBucket: "screenlink-7bbef.firebasestorage.app",
   messagingSenderId: "854919839518",
   appId: "1:854919839518:web:a91e2cc425f34e0290530f",
   measurementId: "G-SDVTFWVFF5"
 };
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const room = "ROOM123";
+/* ===== SALA FIXA ===== */
+const room = (new URLSearchParams(window.location.search).get('room')) || 'ROOMFIXA';
 
-document.getElementById("btn").onclick = async () => {
-    let stream;
+/* UI */
+const statusEl = document.getElementById('status');
+function setStatus(t){ statusEl.innerText = t; }
+
+/* WebRTC */
+let pc = null;
+let localStream = null;
+
+document.getElementById('startBtn').onclick = async () => {
+  setStatus('Pedindo permissão para capturar a tela...');
+  try {
+    // MUST be triggered by user gesture
+    localStream = await navigator.mediaDevices.getDisplayMedia({video:true, audio:false});
+  } catch (err) {
+    setStatus('Permissão negada ou captura indisponível: ' + (err && err.message));
+    return;
+  }
+
+  setStatus('Criando conexão WebRTC...');
+  pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+
+  // envia candidatos para o Firebase (nó: rooms/<room>/phoneCandidates)
+  const phoneCandidatesRef = db.ref('rooms/' + room + '/phoneCandidates');
+
+  pc.onicecandidate = e => {
+    if (!e.candidate) return;
+    // push candidate
+    phoneCandidatesRef.push(e.candidate.toJSON());
+  };
+
+  // adiciona tracks
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+  setStatus('Criando offer...');
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  // grava offer no firebase
+  await db.ref('rooms/' + room + '/offer').set(pc.localDescription.toJSON());
+  setStatus('Offer enviada. Aguardando answer e candidatos do receptor...');
+
+  // quando receber candidatos do receptor (pcCandidates), adiciona-os
+  const pcCandidatesRef = db.ref('rooms/' + room + '/pcCandidates');
+  pcCandidatesRef.on('child_added', snapshot => {
+    const c = snapshot.val();
+    if (!c) return;
     try {
-        stream = await navigator.mediaDevices.getDisplayMedia({video:true, audio:false});
-    } catch(e) {
-        alert("Permissão necessária para começar a transmissão!");
-        console.error(e);
-        return;
+      pc.addIceCandidate(c).catch(()=>{});
+    } catch(e) { /* ignore */ }
+  });
+
+  // quando answer aparece, aplica remoto
+  db.ref('rooms/' + room + '/answer').on('value', async snap => {
+    const ans = snap.val();
+    if (!ans) return;
+    try {
+      await pc.setRemoteDescription(ans);
+      setStatus('Conexão estabelecida — transmitindo!');
+    } catch (e) {
+      setStatus('Erro ao aplicar answer: ' + e.message);
     }
-
-    const pc = new RTCPeerConnection();
-    stream.getTracks().forEach(t => pc.addTrack(t, stream));
-
-    const offerRef = ref(db, "rooms/" + room + "/offer");
-    const answerRef = ref(db, "rooms/" + room + "/answer");
-    const iceRef = ref(db, "rooms/" + room + "/phone_ice");
-
-    pc.onicecandidate = (event) => {
-        if(event.candidate) {
-            set(iceRef, [...(iceRef._cache || []), event.candidate.toJSON()]);
-        }
-    };
-
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    set(offerRef, offer);
-
-    onValue(answerRef, async (snap) => {
-        const ans = snap.val();
-        if(ans && !pc.remoteDescription) {
-            await pc.setRemoteDescription(new RTCSessionDescription(ans));
-        }
-    });
+  });
 };
 </script>
 </body>
