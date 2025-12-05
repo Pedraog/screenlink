@@ -33,7 +33,7 @@ const firebaseConfig = {
   authDomain: "screenlink-7bbef.firebaseapp.com",
   databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: "screenlink-7bbef",
-  storageBucket: "screenlink-7bbef.firebasestorage.app",
+  storageBucket: "screenlink-7bbef.appspot.com",
   messagingSenderId: "854919839518",
   appId: "1:854919839518:web:a91e2cc425f34e0290530f",
   measurementId: "G-SDVTFWVFF5"
@@ -41,43 +41,40 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-
 const room = "ROOM123";
 
 const pc = new RTCPeerConnection();
+const video = document.getElementById("remoteVideo");
 
 pc.ontrack = (event) => {
-    document.getElementById("remoteVideo").srcObject = event.streams[0];
+    video.srcObject = event.streams[0];
 };
 
 async function init() {
     const offerRef = ref(db, "rooms/" + room + "/offer");
     const answerRef = ref(db, "rooms/" + room + "/answer");
-    const iceRef = ref(db, "rooms/" + room + "/pc_ice");
+    const iceRef = ref(db, "rooms/" + room + "/phone_ice");
 
     onValue(offerRef, async (snap) => {
         const offer = snap.val();
-        if (!offer) return;
-
+        if(!offer) return;
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-
         set(answerRef, answer);
     });
 
     onValue(iceRef, async (snap) => {
         const candidates = snap.val();
-        if (!candidates) return;
-
-        for (const c of candidates) {
+        if(!candidates) return;
+        for(const c of candidates) {
             try { await pc.addIceCandidate(c); } catch {}
         }
     });
 
     pc.onicecandidate = (event) => {
-        if (event.candidate) {
+        if(event.candidate) {
             set(iceRef, [...(iceRef._cache || []), event.candidate.toJSON()]);
         }
     };
@@ -87,4 +84,5 @@ init();
 </script>
 </body>
 </html>
+
 
