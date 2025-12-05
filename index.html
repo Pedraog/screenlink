@@ -5,53 +5,85 @@
 <title>Transmitir Tela</title>
 <style>
 body{margin:0;background:#111;color:#eee;font-family:Arial;text-align:center}
-button{font-size:22px;padding:14px 28px;margin-top:40vh;background:#007aff;border:none;color:#fff;border-radius:8px}
+h2{margin-top:40vh;}
 </style>
 </head>
 <body>
-<button id="btn">Transmitir Minha Tela</button>
 
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<h2>Preparando transmissão…</h2>
 
 <script>
-// Config Firebase
+// ---- CONFIG DO FIREBASE ----
 const firebaseConfig = {
-  apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7kYPiVU73pVY",
-  authDomain: "screenlink-7bbef.firebaseapp.com",
-  databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app/",
-  projectId: "screenlink-7bbef",
-  storageBucket: "screenlink-7bbef.firebasestorage.app",
-  messagingSenderId: "854919839518",
-  appId: "1:854919839518:web:a91e2cc425f34e0290530f",
-  measurementId: "G-SDVTFWVFF5"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-
-// Pega ID da sala do link
-const urlParams = new URLSearchParams(window.location.search);
-const roomId = urlParams.get('room') || prompt("Informe o ID da sala");
-
-document.getElementById('btn').onclick = async () => {
-  const stream = await navigator.mediaDevices.getDisplayMedia({video:true,audio:true});
-  const pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
-
-  stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-  pc.onicecandidate = e => {
-    if (e.candidate) return;
-    db.ref('rooms/' + roomId + '/offer').set(pc.localDescription.toJSON());
-  };
-
-  db.ref('rooms/' + roomId + '/answer').on('value', async snapshot => {
-    const answer = snapshot.val();
-    if (answer) await pc.setRemoteDescription(answer);
-  });
-
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
+    apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7kYPiVU73pVY",
+    authDomain: "screenlink-7bbef.firebaseapp.com",
+    databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "screenlink-7bbef",
+    storageBucket: "screenlink-7bbef.firebasestorage.app",
+    messagingSenderId: "854919839518",
+    appId: "1:854919839518:web:a91e2cc425f34e0290530f",
+    measurementId: "G-SDVTFWVFF5"
 };
 </script>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+
+<script>
+(async () => {
+
+    // Inicializa Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Pega o ID da sala vindo do QR
+    const roomId = new URLSearchParams(window.location.search).get("room");
+    if (!roomId) {
+        document.body.innerHTML = "<h2>Erro: QR inválido</h2>";
+        return;
+    }
+
+    // Solicita compartilhamento de tela automaticamente
+    let stream;
+    try {
+        stream = await navigator.mediaDevices.getDisplayMedia({
+            video:true, audio:true
+        });
+    } catch (e) {
+        document.body.innerHTML = "<h2>Você precisa permitir a transmissão</h2>";
+        return;
+    }
+
+    // Cria a conexão WebRTC
+    const pc = new RTCPeerConnection({
+        iceServers:[{ urls: "stun:stun.l.google.com:19302" }]
+    });
+
+    stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+    // Quando ICE terminar, salva oferta no Firebase
+    pc.onicecandidate = e => {
+        if (!e.candidate) {
+            db.ref("rooms/" + roomId + "/offer").set(
+                btoa(JSON.stringify(pc.localDescription))
+            );
+        }
+    };
+
+    // Cria oferta
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    // Fica esperando a answer do PC
+    db.ref("rooms/" + roomId + "/answer").on("value", snap => {
+        if (!snap.exists()) return;
+        const answer = JSON.parse(atob(snap.val()));
+        pc.setRemoteDescription(answer);
+    });
+
+})();
+</script>
+
 </body>
 </html>
