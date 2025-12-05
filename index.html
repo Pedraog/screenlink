@@ -2,6 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Transmitir Tela</title>
 <style>
 body{margin:0;background:#111;color:#eee;font-family:Arial;text-align:center}
@@ -9,13 +10,12 @@ h2{margin-top:40vh;}
 </style>
 </head>
 <body>
-
 <h2>Preparando transmissão…</h2>
 
 <script>
 // ---- CONFIG DO FIREBASE ----
 const firebaseConfig = {
-    apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7kYPiVU73pVY",
+    apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7YPiVU73pVY",
     authDomain: "screenlink-7bbef.firebaseapp.com",
     databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app",
     projectId: "screenlink-7bbef",
@@ -44,30 +44,32 @@ const firebaseConfig = {
         return;
     }
 
+    // Detecta se é Android ou iOS
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
     // Solicita compartilhamento de tela automaticamente
     let stream;
     try {
-        stream = await navigator.mediaDevices.getDisplayMedia({
-            video:true, audio:true
-        });
+        if (isMobile) {
+            // Para Android/iOS, getDisplayMedia é suportado em navegadores modernos
+            stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        } else {
+            // Desktop normal
+            stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+        }
     } catch (e) {
         document.body.innerHTML = "<h2>Você precisa permitir a transmissão</h2>";
         return;
     }
 
-    // Cria a conexão WebRTC
-    const pc = new RTCPeerConnection({
-        iceServers:[{ urls: "stun:stun.l.google.com:19302" }]
-    });
-
+    // Cria conexão WebRTC
+    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
     stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
     // Quando ICE terminar, salva oferta no Firebase
     pc.onicecandidate = e => {
         if (!e.candidate) {
-            db.ref("rooms/" + roomId + "/offer").set(
-                btoa(JSON.stringify(pc.localDescription))
-            );
+            db.ref("rooms/" + roomId + "/offer").set(btoa(JSON.stringify(pc.localDescription)));
         }
     };
 
@@ -75,7 +77,7 @@ const firebaseConfig = {
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    // Fica esperando a answer do PC
+    // Fica escutando a resposta (answer) do PC
     db.ref("rooms/" + roomId + "/answer").on("value", snap => {
         if (!snap.exists()) return;
         const answer = JSON.parse(atob(snap.val()));
