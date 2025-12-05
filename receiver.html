@@ -2,42 +2,70 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>QR Code Teste</title>
+<title>Receber Tela</title>
 <style>
-body{margin:0;background:#000;color:#fff;text-align:center;font-family:Arial;}
-#qrcode{margin-top:50px;}
+body{margin:0;background:#000}
+video{width:100%;height:100vh;object-fit:contain;}
 </style>
 </head>
 <body>
-<h2>Escaneie o QR</h2>
-<div id="qrcode"></div>
 
-<!-- ESTA É A BIBLIOTECA QUE FUNCIONA -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<video id="v" autoplay playsinline></video>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 
 <script>
-window.onload = function() {
+// ---- CONFIG DO FIREBASE ----
+const firebaseConfig = {
+    apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7kYPiVU73pVY",
+    authDomain: "screenlink-7bbef.firebaseapp.com",
+    databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app",
+    projectId: "screenlink-7bbef",
+    storageBucket: "screenlink-7bbef.firebasestorage.app",
+    messagingSenderId: "854919839518",
+    appId: "1:854919839518:web:a91e2cc425f34e0290530f",
+    measurementId: "G-SDVTFWVFF5"
+};
 
-    // ID de sala aleatório
-    const roomId = Math.random().toString(36).substring(2,8).toUpperCase();
+// Inicializa Firebase
+const app = firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
-    // Link que vai aparecer no QR
-    const link = "https://pedraog.github.io/screenlink/index.html?room=" + roomId;
+(async () => {
 
-    try {
-        new QRCode(document.getElementById("qrcode"), {
-            text: link,
-            width: 256,
-            height: 256,
-            colorDark : "#ffffff",
-            colorLight : "#000000"
-        });
-    } catch (e) {
-        alert("Erro ao gerar QR code!");
-        console.error(e);
+    const pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+    const video = document.getElementById("v");
+
+    pc.ontrack = e => {
+        video.srcObject = e.streams[0];
+    };
+
+    // Pega o código da sala automaticamente via prompt
+    const roomId = prompt("Cole o código da sala (QR do iPhone):");
+    if (!roomId) {
+        alert("Nenhuma sala informada");
+        return;
     }
 
-};
+    // Escuta a oferta do iPhone
+    db.ref("rooms/" + roomId + "/offer").once("value").then(snap => {
+        if (!snap.exists()) {
+            alert("Oferta não encontrada. Verifique o QR code.");
+            return;
+        }
+        const offer = JSON.parse(atob(snap.val()));
+        pc.setRemoteDescription(offer).then(async () => {
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            // Envia a resposta para o Firebase
+            db.ref("rooms/" + roomId + "/answer").set(btoa(JSON.stringify(answer)));
+        });
+    });
+
+})();
 </script>
+
 </body>
 </html>
