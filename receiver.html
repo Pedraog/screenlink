@@ -4,65 +4,87 @@
 <meta charset="utf-8">
 <title>Receber Tela</title>
 <style>
-body{margin:0;background:#000}
-video{width:100%;height:100vh;object-fit:contain;}
+body {
+    background: #000;
+    color: white;
+    margin: 0;
+    font-family: Arial;
+    text-align: center;
+}
+video {
+    width: 100vw;
+    height: 100vh;
+    object-fit: contain;
+    background: #111;
+}
 </style>
 </head>
 <body>
 
-<video id="v" autoplay playsinline></video>
+<h2>Aguardando transmissão…</h2>
+<video id="remoteVideo" autoplay playsinline></video>
 
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
 
-<script>
-// ---- CONFIG DO FIREBASE ----
 const firebaseConfig = {
-    apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7kYPiVU73pVY",
-    authDomain: "screenlink-7bbef.firebaseapp.com",
-    databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "screenlink-7bbef",
-    storageBucket: "screenlink-7bbef.firebasestorage.app",
-    messagingSenderId: "854919839518",
-    appId: "1:854919839518:web:a91e2cc425f34e0290530f",
-    measurementId: "G-SDVTFWVFF5"
+  apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7kYPiVU73pVY",
+  authDomain: "screenlink-7bbef.firebaseapp.com",
+  databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "screenlink-7bbef",
+  storageBucket: "screenlink-7bbef.firebasestorage.app",
+  messagingSenderId: "854919839518",
+  appId: "1:854919839518:web:a91e2cc425f34e0290530f",
+  measurementId: "G-SDVTFWVFF5"
 };
 
-// Inicializa Firebase
-const app = firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
-(async () => {
-    const pc = new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
-    const video = document.getElementById("v");
+const room = "ROOM123";
 
-    pc.ontrack = e => {
-        video.srcObject = e.streams[0];
-    };
+const pc = new RTCPeerConnection();
 
-    // Pega o ID da sala do QR via parâmetro URL
-    const roomId = new URLSearchParams(window.location.search).get("room");
-    if (!roomId) {
-        document.body.innerHTML = "<h2>Erro: Sala não encontrada no link</h2>";
-        return;
-    }
+pc.ontrack = (event) => {
+    document.getElementById("remoteVideo").srcObject = event.streams[0];
+};
 
-    // Escuta a oferta do iPhone/Android
-    db.ref("rooms/" + roomId + "/offer").on("value", async snap => {
-        if (!snap.exists()) return;
-        const offer = JSON.parse(atob(snap.val()));
-        await pc.setRemoteDescription(offer);
+async function init() {
+    const offerRef = ref(db, "rooms/" + room + "/offer");
+    const answerRef = ref(db, "rooms/" + room + "/answer");
+    const iceRef = ref(db, "rooms/" + room + "/pc_ice");
+
+    onValue(offerRef, async (snap) => {
+        const offer = snap.val();
+        if (!offer) return;
+
+        await pc.setRemoteDescription(new RTCSessionDescription(offer));
 
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
 
-        // Envia resposta para o Firebase
-        db.ref("rooms/" + roomId + "/answer").set(btoa(JSON.stringify(answer)));
+        set(answerRef, answer);
     });
 
-})();
-</script>
+    onValue(iceRef, async (snap) => {
+        const candidates = snap.val();
+        if (!candidates) return;
 
+        for (const c of candidates) {
+            try { await pc.addIceCandidate(c); } catch {}
+        }
+    });
+
+    pc.onicecandidate = (event) => {
+        if (event.candidate) {
+            set(iceRef, [...(iceRef._cache || []), event.candidate.toJSON()]);
+        }
+    };
+}
+
+init();
+</script>
 </body>
 </html>
+
