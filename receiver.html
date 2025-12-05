@@ -2,87 +2,82 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>Receber Tela</title>
+<title>Receber Tela (Receptor)</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
-body {
-    background: #000;
-    color: white;
-    margin: 0;
-    font-family: Arial;
-    text-align: center;
-}
-video {
-    width: 100vw;
-    height: 100vh;
-    object-fit: contain;
-    background: #111;
-}
+  body{background:#000;color:#fff;margin:0;font-family:Arial;text-align:center}
+  h1{padding:14px}
+  video{width:100vw;height:calc(100vh - 48px);object-fit:contain;background:#111}
+  #info{position:absolute;left:8px;top:8px;color:#0f0;font-size:13px}
 </style>
 </head>
 <body>
+  <h1>Receber Tela — sala fixa</h1>
+  <div id="info">Aguardando transmissão (sala: ROOMFIXA)</div>
+  <video id="remoteVideo" autoplay playsinline></video>
 
-<h2>Aguardando transmissão…</h2>
-<video id="remoteVideo" autoplay playsinline></video>
+  <!-- Firebase compat -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
-
+<script>
+/* ===== CONFIG FIREBASE (seu projeto) ===== */
 const firebaseConfig = {
   apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7kYPiVU73pVY",
   authDomain: "screenlink-7bbef.firebaseapp.com",
   databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: "screenlink-7bbef",
-  storageBucket: "screenlink-7bbef.appspot.com",
+  storageBucket: "screenlink-7bbef.firebasestorage.app",
   messagingSenderId: "854919839518",
   appId: "1:854919839518:web:a91e2cc425f34e0290530f",
   measurementId: "G-SDVTFWVFF5"
 };
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
 
-const app = initializeApp(firebaseConfig);
-const db = getDatabase(app);
-const room = "ROOM123";
+const room = (new URLSearchParams(window.location.search).get('room')) || 'ROOMFIXA';
+document.getElementById('info').innerText = 'Aguardando transmissão (sala: ' + room + ')';
 
-const pc = new RTCPeerConnection();
-const video = document.getElementById("remoteVideo");
+const remoteVideo = document.getElementById('remoteVideo');
+const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
 
-pc.ontrack = (event) => {
-    video.srcObject = event.streams[0];
+pc.ontrack = e => {
+  remoteVideo.srcObject = e.streams[0];
 };
 
-async function init() {
-    const offerRef = ref(db, "rooms/" + room + "/offer");
-    const answerRef = ref(db, "rooms/" + room + "/answer");
-    const iceRef = ref(db, "rooms/" + room + "/phone_ice");
+/* Envia candidatos do receptor para firebase (pcCandidates) */
+const pcCandidatesRef = db.ref('rooms/' + room + '/pcCandidates');
+pc.onicecandidate = e => {
+  if (!e.candidate) return;
+  pcCandidatesRef.push(e.candidate.toJSON());
+};
 
-    onValue(offerRef, async (snap) => {
-        const offer = snap.val();
-        if(!offer) return;
-        await pc.setRemoteDescription(new RTCSessionDescription(offer));
+/* Quando aparecer offer do transmissor, processa e responde com answer */
+const offerRef = db.ref('rooms/' + room + '/offer');
+offerRef.on('value', async snap => {
+  const offer = snap.val();
+  if (!offer) return;
+  try {
+    await pc.setRemoteDescription(offer);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    // grava answer
+    await db.ref('rooms/' + room + '/answer').set(pc.localDescription.toJSON());
+    document.getElementById('info').innerText = 'Answer enviada — aguardando mídia...';
+  } catch (e) {
+    document.getElementById('info').innerText = 'Erro ao processar offer: ' + e.message;
+  }
+});
 
-        const answer = await pc.createAnswer();
-        await pc.setLocalDescription(answer);
-        set(answerRef, answer);
-    });
-
-    onValue(iceRef, async (snap) => {
-        const candidates = snap.val();
-        if(!candidates) return;
-        for(const c of candidates) {
-            try { await pc.addIceCandidate(c); } catch {}
-        }
-    });
-
-    pc.onicecandidate = (event) => {
-        if(event.candidate) {
-            set(iceRef, [...(iceRef._cache || []), event.candidate.toJSON()]);
-        }
-    };
-}
-
-init();
+/* Quando surgirem candidatos do telemóvel (phoneCandidates), adiciona-os */
+const phoneCandidatesRef = db.ref('rooms/' + room + '/phoneCandidates');
+phoneCandidatesRef.on('child_added', snapshot => {
+  const c = snapshot.val();
+  if (!c) return;
+  try {
+    pc.addIceCandidate(c).catch(()=>{});
+  } catch(e){ /* ignore */ }
+});
 </script>
 </body>
 </html>
-
-
