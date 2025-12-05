@@ -35,7 +35,7 @@ const firebaseConfig = {
   authDomain: "screenlink-7bbef.firebaseapp.com",
   databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app",
   projectId: "screenlink-7bbef",
-  storageBucket: "screenlink-7bbef.firebasestorage.app",
+  storageBucket: "screenlink-7bbef.appspot.com",
   messagingSenderId: "854919839518",
   appId: "1:854919839518:web:a91e2cc425f34e0290530f",
   measurementId: "G-SDVTFWVFF5"
@@ -43,23 +43,19 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
-
 const room = "ROOM123";
 
 document.getElementById("btn").onclick = async () => {
     let stream;
     try {
-        stream = await navigator.mediaDevices.getDisplayMedia({
-            video: true,
-            audio: false
-        });
-    } catch (e) {
+        stream = await navigator.mediaDevices.getDisplayMedia({video:true, audio:false});
+    } catch(e) {
         alert("Permissão necessária para começar a transmissão!");
+        console.error(e);
         return;
     }
 
     const pc = new RTCPeerConnection();
-
     stream.getTracks().forEach(t => pc.addTrack(t, stream));
 
     const offerRef = ref(db, "rooms/" + room + "/offer");
@@ -67,19 +63,18 @@ document.getElementById("btn").onclick = async () => {
     const iceRef = ref(db, "rooms/" + room + "/phone_ice");
 
     pc.onicecandidate = (event) => {
-        if (event.candidate) {
+        if(event.candidate) {
             set(iceRef, [...(iceRef._cache || []), event.candidate.toJSON()]);
         }
     };
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-
     set(offerRef, offer);
 
     onValue(answerRef, async (snap) => {
         const ans = snap.val();
-        if (ans && !pc.remoteDescription) {
+        if(ans && !pc.remoteDescription) {
             await pc.setRemoteDescription(new RTCSessionDescription(ans));
         }
     });
@@ -87,4 +82,3 @@ document.getElementById("btn").onclick = async () => {
 </script>
 </body>
 </html>
-
