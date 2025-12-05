@@ -2,90 +2,89 @@
 <html>
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Transmitir Tela</title>
 <style>
-body{margin:0;background:#111;color:#eee;font-family:Arial;text-align:center}
-h2{margin-top:40vh;}
+body {
+    background: #000;
+    color: white;
+    font-family: Arial;
+    text-align: center;
+    padding: 20px;
+}
+button {
+    padding: 15px 25px;
+    border: none;
+    background: #0a84ff;
+    color: white;
+    border-radius: 8px;
+    font-size: 22px;
+}
 </style>
 </head>
 <body>
-<h2>Preparando transmissão…</h2>
 
-<script>
-// ---- CONFIG DO FIREBASE ----
+<h2>Toque para transmitir sua tela</h2>
+<button id="btn">Iniciar transmissão</button>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, set, onValue } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
 const firebaseConfig = {
-    apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7YPiVU73pVY",
-    authDomain: "screenlink-7bbef.firebaseapp.com",
-    databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app",
-    projectId: "screenlink-7bbef",
-    storageBucket: "screenlink-7bbef.firebasestorage.app",
-    messagingSenderId: "854919839518",
-    appId: "1:854919839518:web:a91e2cc425f34e0290530f",
-    measurementId: "G-SDVTFWVFF5"
+  apiKey: "AIzaSyD6vf58vpJDL444wF7XkzF7kYPiVU73pVY",
+  authDomain: "screenlink-7bbef.firebaseapp.com",
+  databaseURL: "https://screenlink-7bbef-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "screenlink-7bbef",
+  storageBucket: "screenlink-7bbef.firebasestorage.app",
+  messagingSenderId: "854919839518",
+  appId: "1:854919839518:web:a91e2cc425f34e0290530f",
+  measurementId: "G-SDVTFWVFF5"
 };
-</script>
 
-<!-- Firebase SDK -->
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
-<script>
-(async () => {
+const room = "ROOM123";
 
-    // Inicializa Firebase
-    const app = firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
-
-    // Pega o ID da sala vindo do QR
-    const roomId = new URLSearchParams(window.location.search).get("room");
-    if (!roomId) {
-        document.body.innerHTML = "<h2>Erro: QR inválido</h2>";
-        return;
-    }
-
-    // Detecta se é Android ou iOS
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-
-    // Solicita compartilhamento de tela automaticamente
+document.getElementById("btn").onclick = async () => {
     let stream;
     try {
-        if (isMobile) {
-            // Para Android/iOS, getDisplayMedia é suportado em navegadores modernos
-            stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        } else {
-            // Desktop normal
-            stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
-        }
+        stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: false
+        });
     } catch (e) {
-        document.body.innerHTML = "<h2>Você precisa permitir a transmissão</h2>";
+        alert("Permissão necessária para começar a transmissão!");
         return;
     }
 
-    // Cria conexão WebRTC
-    const pc = new RTCPeerConnection({ iceServers: [{ urls: "stun:stun.l.google.com:19302" }] });
-    stream.getTracks().forEach(track => pc.addTrack(track, stream));
+    const pc = new RTCPeerConnection();
 
-    // Quando ICE terminar, salva oferta no Firebase
-    pc.onicecandidate = e => {
-        if (!e.candidate) {
-            db.ref("rooms/" + roomId + "/offer").set(btoa(JSON.stringify(pc.localDescription)));
+    stream.getTracks().forEach(t => pc.addTrack(t, stream));
+
+    const offerRef = ref(db, "rooms/" + room + "/offer");
+    const answerRef = ref(db, "rooms/" + room + "/answer");
+    const iceRef = ref(db, "rooms/" + room + "/phone_ice");
+
+    pc.onicecandidate = (event) => {
+        if (event.candidate) {
+            set(iceRef, [...(iceRef._cache || []), event.candidate.toJSON()]);
         }
     };
 
-    // Cria oferta
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    // Fica escutando a resposta (answer) do PC
-    db.ref("rooms/" + roomId + "/answer").on("value", snap => {
-        if (!snap.exists()) return;
-        const answer = JSON.parse(atob(snap.val()));
-        pc.setRemoteDescription(answer);
+    set(offerRef, offer);
+
+    onValue(answerRef, async (snap) => {
+        const ans = snap.val();
+        if (ans && !pc.remoteDescription) {
+            await pc.setRemoteDescription(new RTCSessionDescription(ans));
+        }
     });
-
-})();
+};
 </script>
-
 </body>
 </html>
+
